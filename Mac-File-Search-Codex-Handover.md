@@ -1,12 +1,12 @@
 # Mac File Search — Codex Handover Prompts
 
-## How to use
+**Prompt 1**. Prompt 1 contains the complete scope and authorizes implementation through local delivery; it is not a request for a plan only.
 
-Give this file to Codex in the project workspace, preferably on the Intel Mac where the app will run, and ask it to execute **Prompt 1**. Prompt 1 contains the complete scope and authorizes implementation through local delivery; it is not a request for a plan only.
+**Prompt 2** is a follow-up for a focused correctness review. 
 
-**Prompt 2** is a follow-up for a focused correctness review. **Prompt 3** is a follow-up for release verification and packaging. They reinforce requirements already included in Prompt 1; you do not need to keep sending prompts to authorize ordinary progress. **Prompt 4** resumes interrupted work.
+**Prompt 3** is a follow-up for release verification and packaging. They reinforce requirements already included in Prompt 1; you do not need to keep sending prompts to authorize ordinary progress. 
 
-No preparation is required for hardware details that Codex can inspect. If the execution environment is not the target Mac, Codex must identify what it cannot verify there.
+**Prompt 4** resumes interrupted work.
 
 The working name is **Mac File Search**. Renaming and elaborate branding are not priorities.
 
