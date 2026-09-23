@@ -19,8 +19,20 @@ public struct DirectScanner: Sendable {
                 summary.skipped += 1; summary.messages.append("Unavailable location: \(location.path)"); continue
             }
             let keys: [URLResourceKey] = [.isRegularFileKey, .isDirectoryKey, .isSymbolicLinkKey, .isPackageKey, .isHiddenKey, .fileSizeKey, .creationDateKey, .contentModificationDateKey, .addedToDirectoryDateKey, .fileResourceIdentifierKey]
+            var enumerationFailures: [(path: String, description: String)] = []
             guard let enumerator = fm.enumerator(at: URL(fileURLWithPath: location.path), includingPropertiesForKeys: keys,
-                options: location.includeSubfolders ? [] : [.skipsSubdirectoryDescendants], errorHandler: { _, _ in true }) else { continue }
+                options: location.includeSubfolders ? [] : [.skipsSubdirectoryDescendants], errorHandler: { url, error in
+                    enumerationFailures.append((url.path, error.localizedDescription))
+                    return true
+                }) else {
+                summary.skipped += max(1, enumerationFailures.count)
+                if enumerationFailures.isEmpty {
+                    summary.messages.append("Unable to enumerate: \(location.path)")
+                } else {
+                    summary.messages.append(contentsOf: enumerationFailures.map { "Unreadable: \($0.path) (\($0.description))" })
+                }
+                continue
+            }
             while let url = enumerator.nextObject() as? URL {
                 if await token.isCancelled() { summary.messages.append("Cancelled"); break }
                 if location.excludedSubtrees.contains(where: { url.path == $0 || url.path.hasPrefix($0 + "/") }) { enumerator.skipDescendants(); continue }
@@ -47,6 +59,8 @@ public struct DirectScanner: Sendable {
                     if batch.count >= 100 { await onBatch(batch); batch.removeAll(keepingCapacity: true) }
                 } catch { summary.skipped += 1; summary.messages.append("Unreadable: \(url.path)") }
             }
+            summary.skipped += enumerationFailures.count
+            summary.messages.append(contentsOf: enumerationFailures.map { "Unreadable: \($0.path) (\($0.description))" })
         }
         if !batch.isEmpty { await onBatch(batch) }
         return summary

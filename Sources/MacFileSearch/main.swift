@@ -31,7 +31,14 @@ import SearchCore
             running = false
         }
     }
-    func cancel() { Task { await token?.cancel() }; task?.cancel(); running = false }
+    func cancel() {
+        let tokenToCancel = token
+        token = nil
+        Task { await tokenToCancel?.cancel() }
+        task?.cancel()
+        task = nil
+        running = false
+    }
     func clear() { cancel(); value = ""; results = []; status = "Ready" }
 }
 
