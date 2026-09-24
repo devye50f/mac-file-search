@@ -19,19 +19,27 @@ import SearchCore
     @Published var status = "Ready — choose Indexed or Direct Scan"
     @Published var running = false
     private var task: Task<Void, Never>?, token: CancellationToken?
+    private var generation = UUID()
     func runDirect() {
         cancel(); results = []; running = true; status = "Direct scan: 0 results"
+        let generation = UUID(); self.generation = generation
         let token = CancellationToken(); self.token = token
         let search = SavedSearch(name: "Current", expression: .criterion(.init(field: field, op: op, value: value)), locations: locations)
         task = Task {
             let summary = await DirectScanner().search(search, token: token) { [weak self] batch in
-                await MainActor.run { self?.results.append(contentsOf: batch); self?.status = "Direct scan: \(self?.results.count ?? 0) results…" }
+                await MainActor.run {
+                    guard self?.generation == generation else { return }
+                    self?.results.append(contentsOf: batch)
+                    self?.status = "Direct scan: \(self?.results.count ?? 0) results…"
+                }
             }
+            guard self.generation == generation, !Task.isCancelled else { return }
             status = "Direct scan complete — \(summary.matched) matches; \(summary.unknown) incomplete; \(summary.skipped) skipped"
             running = false
         }
     }
     func cancel() {
+        generation = UUID()
         let tokenToCancel = token
         token = nil
         Task { await tokenToCancel?.cancel() }

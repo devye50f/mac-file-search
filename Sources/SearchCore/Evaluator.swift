@@ -24,13 +24,22 @@ public enum Evaluator {
         if c.field == .size {
             guard let n = r.size, let first = Int64(c.value) else { return .unknown }
             switch c.op { case .above: return n > first ? .yes : .no; case .below: return n < first ? .yes : .no
-            case .inclusiveRange: guard let s = c.secondValue, let last = Int64(s) else { return .unknown }; return (first...last).contains(n) ? .yes : .no
+            case .inclusiveRange:
+                guard let s = c.secondValue, let last = Int64(s), first <= last else { return .unknown }
+                return (first...last).contains(n) ? .yes : .no
             default: return .unknown }
         }
         if [.created, .modified, .dateAdded].contains(c.field) {
             let date = c.field == .created ? r.created : (c.field == .modified ? r.modified : r.dateAdded)
-            guard let date, let boundary = ISO8601DateFormatter().date(from: c.value) else { return .unknown }
-            switch c.op { case .before: return date < boundary ? .yes : .no; case .after: return date > boundary ? .yes : .no; default: return .unknown }
+            guard let date, let boundary = parseISO8601(c.value) else { return .unknown }
+            switch c.op {
+            case .before: return date < boundary ? .yes : .no
+            case .after: return date > boundary ? .yes : .no
+            case .inclusiveRange:
+                guard let second = c.secondValue, let end = parseISO8601(second), boundary <= end else { return .unknown }
+                return (boundary...end).contains(date) ? .yes : .no
+            default: return .unknown
+            }
         }
         let source: String?
         switch c.field {
@@ -46,6 +55,15 @@ public enum Evaluator {
         }
         guard let source else { return .unknown }
         let options: String.CompareOptions = c.caseMode == .insensitive ? [.caseInsensitive, .diacriticInsensitive] : []
+        if c.field == .fileExtension, c.op == .equals || c.op == .excludes {
+            let extensions = c.value
+                .split(whereSeparator: { $0 == "," || $0 == ";" || $0.isWhitespace })
+                .map { $0.hasPrefix(".") ? String($0.dropFirst()) : String($0) }
+                .filter { !$0.isEmpty }
+            guard !extensions.isEmpty else { return .unknown }
+            let matches = extensions.contains { source.compare($0, options: options) == .orderedSame }
+            return (c.op == .excludes ? !matches : matches) ? .yes : .no
+        }
         let positive: Bool
         switch c.op {
         case .contains, .excludes: positive = source.range(of: c.value, options: options) != nil
@@ -66,6 +84,12 @@ public enum Evaluator {
 
     public static func isSystemPath(_ path: String) -> Bool {
         ["/System", "/Library", "/private", "/usr", "/bin", "/sbin"].contains { path == $0 || path.hasPrefix($0 + "/") }
+    }
+
+    private static func parseISO8601(_ value: String) -> Date? {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.date(from: value) ?? ISO8601DateFormatter().date(from: value)
     }
 }
 
