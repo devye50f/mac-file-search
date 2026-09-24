@@ -21,10 +21,10 @@ import SearchCore
     private var task: Task<Void, Never>?, token: CancellationToken?
     func runDirect() {
         cancel(); results = []; running = true; status = "Direct scan: 0 results"
-        let token = CancellationToken(); self.token = token
+        let scanToken = CancellationToken(); token = scanToken
         let search = SavedSearch(name: "Current", expression: .criterion(.init(field: field, op: op, value: value)), locations: locations)
-        task = Task {
-            let summary = await DirectScanner().search(search, token: token) { [weak self] batch in
+        task = Task { [scanToken] in
+            let summary = await DirectScanner().search(search, token: scanToken) { [weak self] batch in
                 await MainActor.run { self?.results.append(contentsOf: batch); self?.status = "Direct scan: \(self?.results.count ?? 0) results…" }
             }
             status = "Direct scan complete — \(summary.matched) matches; \(summary.unknown) incomplete; \(summary.skipped) skipped"
