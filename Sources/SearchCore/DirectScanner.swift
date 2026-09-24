@@ -12,7 +12,7 @@ public struct DirectScanner: Sendable {
     public func search(_ search: SavedSearch, token: CancellationToken = .init(), onBatch: @Sendable ([FileRecord]) async -> Void) async -> SearchSummary {
         var summary = SearchSummary(), batch: [FileRecord] = [], identities = Set<String>()
         let fm = FileManager.default
-        for location in search.locations {
+        locationLoop: for location in search.locations {
             if await token.isCancelled() { summary.messages.append("Cancelled"); break }
             var isDirectory: ObjCBool = false
             guard fm.fileExists(atPath: location.path, isDirectory: &isDirectory), isDirectory.boolValue else {
@@ -34,7 +34,7 @@ public struct DirectScanner: Sendable {
                 continue
             }
             while let url = enumerator.nextObject() as? URL {
-                if await token.isCancelled() { summary.messages.append("Cancelled"); break }
+                if await token.isCancelled() { summary.messages.append("Cancelled"); break locationLoop }
                 if location.excludedSubtrees.contains(where: { url.path == $0 || url.path.hasPrefix($0 + "/") }) { enumerator.skipDescendants(); continue }
                 do {
                     let v = try url.resourceValues(forKeys: Set(keys))
@@ -46,9 +46,12 @@ public struct DirectScanner: Sendable {
                     guard identities.insert(identity).inserted else { continue }
                     let needsContent = search.expression.referencesContents
                     let extraction = needsContent ? TextExtractor.extract(url: url, limit: search.settings.maximumContentBytes) : .notRequested
+                    let hiddenByName = url.pathComponents.contains { component in
+                        component.count > 1 && component.hasPrefix(".") && component != ".."
+                    }
                     let record = FileRecord(path: url.path, name: url.lastPathComponent, kind: url.pathExtension.lowercased(),
                         size: v.fileSize.map(Int64.init), created: v.creationDate, modified: v.contentModificationDate,
-                        dateAdded: v.addedToDirectoryDate, isHidden: v.isHidden,
+                        dateAdded: v.addedToDirectoryDate, isHidden: (v.isHidden == true || hiddenByName),
                         content: extraction.text, contentFailure: extraction.failure)
                     summary.examined += 1
                     switch Evaluator.evaluate(search.expression, record: record) {

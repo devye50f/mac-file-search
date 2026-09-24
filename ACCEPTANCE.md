@@ -28,9 +28,9 @@ Recorded 2026-09-22 in Ubuntu 24.04.4, x86_64, 17 GiB RAM, Swift 6.2.4. This is 
 ### Partial
 
 - GUI currently exposes a single criterion and one initial home scope; nested builder, scope editor, Advanced controls, saved-search management, highlighted snippets/captures, and Finder-tag controls need wiring.
-- Cancellation is checked per enumerated entry, but generation IDs and independent worker termination are absent.
+- Cancellation is checked per enumerated entry and GUI generation IDs prevent late batches from replacing a newer search, but independent worker termination is absent.
 - Kind currently uses extension in portable scanning rather than macOS content types.
-- Hidden entries are enumerated and file hidden state is read; hidden-ancestor policy is not yet selectable.
+- Hidden entries are enumerated; filesystem hidden state, dotfiles, and files below dot-prefixed ancestors are treated as hidden. The ancestor policy is not yet selectable.
 - Regex creator provides raw editing and a minimal guided literal escape, not the complete block builder/test suite.
 - Role matcher covers several required negative cases but needs clause-boundary, Unicode, wrapped-line, and two-person/two-role fixtures.
 

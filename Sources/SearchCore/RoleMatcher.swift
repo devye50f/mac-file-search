@@ -7,7 +7,6 @@ public struct RoleOptions: Sendable {
 }
 public enum RoleMatcher {
     public static func candidates(in text: String, options: RoleOptions) -> [RoleCandidate] {
-        if text.range(of: "on behalf of", options: .caseInsensitive) != nil { return [] }
         let name = #"(?:[\p{L}][\p{L}'’\-]+(?:\s+[\p{L}]\.)?(?:\s+[\p{L}][\p{L}'’\-]+)?)"#
         let roles = options.phrases.map(NSRegularExpression.escapedPattern(for:)).joined(separator: "|")
         guard !roles.isEmpty else { return [] }
@@ -31,6 +30,9 @@ public enum RoleMatcher {
                                  isPartial: !candidateName.contains(" ")))
             }
         }
-        return out
+        var seen = Set<String>()
+        return out.filter {
+            seen.insert("\($0.name.lowercased())\u{0}\($0.role.lowercased())\u{0}\($0.evidence.lowercased())").inserted
+        }
     }
 }
