@@ -20,7 +20,8 @@ import SearchCore
     @Published var running = false
     private var task: Task<Void, Never>?, token: CancellationToken?
     func runDirect() {
-        cancel(); results = []; running = true; status = "Direct scan: 0 results"
+        let tokenToCancel = token
+        cancel(token: tokenToCancel); results = []; running = true; status = "Direct scan: 0 results"
         let token = CancellationToken(); self.token = token
         let search = SavedSearch(name: "Current", expression: .criterion(.init(field: field, op: op, value: value)), locations: locations)
         task = Task {
@@ -32,7 +33,9 @@ import SearchCore
         }
     }
     func cancel() {
-        let tokenToCancel = token
+        cancel(token: token)
+    }
+    private func cancel(token tokenToCancel: CancellationToken?) {
         token = nil
         Task { await tokenToCancel?.cancel() }
         task?.cancel()

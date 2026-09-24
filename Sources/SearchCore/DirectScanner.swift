@@ -7,6 +7,26 @@ public actor CancellationToken {
     public func isCancelled() -> Bool { cancelled }
 }
 
+final class EnumerationFailures: @unchecked Sendable {
+    private let lock = NSLock()
+    private var failures: [(path: String, description: String)] = []
+
+    func record(url: URL, error: Error) {
+        lock.lock()
+        failures.append((url.path, error.localizedDescription))
+        lock.unlock()
+    }
+
+    func add(to summary: inout SearchSummary) {
+        lock.lock()
+        let recorded = failures
+        failures.removeAll()
+        lock.unlock()
+        summary.skipped += recorded.count
+        summary.messages.append(contentsOf: recorded.map { "Unreadable: \($0.path) (\($0.description))" })
+    }
+}
+
 public struct DirectScanner: Sendable {
     public init() {}
     public func search(_ search: SavedSearch, token: CancellationToken = .init(), onBatch: @Sendable ([FileRecord]) async -> Void) async -> SearchSummary {
@@ -19,18 +39,15 @@ public struct DirectScanner: Sendable {
                 summary.skipped += 1; summary.messages.append("Unavailable location: \(location.path)"); continue
             }
             let keys: [URLResourceKey] = [.isRegularFileKey, .isDirectoryKey, .isSymbolicLinkKey, .isPackageKey, .isHiddenKey, .fileSizeKey, .creationDateKey, .contentModificationDateKey, .addedToDirectoryDateKey, .fileResourceIdentifierKey]
-            var enumerationFailures: [(path: String, description: String)] = []
+            let enumerationFailures = EnumerationFailures()
             guard let enumerator = fm.enumerator(at: URL(fileURLWithPath: location.path), includingPropertiesForKeys: keys,
                 options: location.includeSubfolders ? [] : [.skipsSubdirectoryDescendants], errorHandler: { url, error in
-                    enumerationFailures.append((url.path, error.localizedDescription))
+                    enumerationFailures.record(url: url, error: error)
                     return true
                 }) else {
-                summary.skipped += max(1, enumerationFailures.count)
-                if enumerationFailures.isEmpty {
-                    summary.messages.append("Unable to enumerate: \(location.path)")
-                } else {
-                    summary.messages.append(contentsOf: enumerationFailures.map { "Unreadable: \($0.path) (\($0.description))" })
-                }
+                summary.skipped += 1
+                summary.messages.append("Unable to enumerate: \(location.path)")
+                enumerationFailures.add(to: &summary)
                 continue
             }
             while let url = enumerator.nextObject() as? URL {
@@ -59,8 +76,7 @@ public struct DirectScanner: Sendable {
                     if batch.count >= 100 { await onBatch(batch); batch.removeAll(keepingCapacity: true) }
                 } catch { summary.skipped += 1; summary.messages.append("Unreadable: \(url.path)") }
             }
-            summary.skipped += enumerationFailures.count
-            summary.messages.append(contentsOf: enumerationFailures.map { "Unreadable: \($0.path) (\($0.description))" })
+            enumerationFailures.add(to: &summary)
         }
         if !batch.isEmpty { await onBatch(batch) }
         return summary
