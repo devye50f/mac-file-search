@@ -24,7 +24,9 @@ public enum Evaluator {
         if c.field == .size {
             guard let n = r.size, let first = Int64(c.value) else { return .unknown }
             switch c.op { case .above: return n > first ? .yes : .no; case .below: return n < first ? .yes : .no
-            case .inclusiveRange: guard let s = c.secondValue, let last = Int64(s) else { return .unknown }; return (first...last).contains(n) ? .yes : .no
+            case .inclusiveRange:
+                guard let s = c.secondValue, let last = Int64(s), first <= last else { return .unknown }
+                return (first...last).contains(n) ? .yes : .no
             default: return .unknown }
         }
         if [.created, .modified, .dateAdded].contains(c.field) {

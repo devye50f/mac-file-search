@@ -18,7 +18,13 @@ public struct DirectScanner: Sendable {
             guard fm.fileExists(atPath: location.path, isDirectory: &isDirectory), isDirectory.boolValue else {
                 summary.skipped += 1; summary.messages.append("Unavailable location: \(location.path)"); continue
             }
-            let keys: [URLResourceKey] = [.isRegularFileKey, .isDirectoryKey, .isSymbolicLinkKey, .isPackageKey, .isHiddenKey, .fileSizeKey, .creationDateKey, .contentModificationDateKey, .addedToDirectoryDateKey, .fileResourceIdentifierKey]
+            var keys: [URLResourceKey] = [.isRegularFileKey, .isDirectoryKey, .isSymbolicLinkKey, .isPackageKey, .isHiddenKey, .fileSizeKey, .creationDateKey, .contentModificationDateKey, .addedToDirectoryDateKey, .fileResourceIdentifierKey]
+#if os(macOS)
+            // Reading a File Provider placeholder can implicitly download it. Fetch the
+            // availability metadata with the other enumeration properties so content
+            // extraction can preserve the scanner's no-download guarantee.
+            keys.append(contentsOf: [.isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey])
+#endif
             let issues = ScanIssues()
             guard let enumerator = fm.enumerator(at: URL(fileURLWithPath: location.path), includingPropertiesForKeys: keys,
                 options: location.includeSubfolders ? [] : [.skipsSubdirectoryDescendants], errorHandler: { url, error in
@@ -44,7 +50,16 @@ public struct DirectScanner: Sendable {
                     let identity = (v.fileResourceIdentifier.map { String(describing: $0) }) ?? url.standardizedFileURL.path
                     guard identities.insert(identity).inserted else { continue }
                     let needsContent = search.expression.referencesContents
-                    let extraction = needsContent ? TextExtractor.extract(url: url, limit: search.settings.maximumContentBytes) : .notRequested
+                    let extraction: Extraction
+#if os(macOS)
+                    if needsContent && Self.isUnmaterializedCloudItem(v) {
+                        extraction = Extraction(text: nil, failure: "Cloud item is not downloaded")
+                    } else {
+                        extraction = needsContent ? TextExtractor.extract(url: url, limit: search.settings.maximumContentBytes) : .notRequested
+                    }
+#else
+                    extraction = needsContent ? TextExtractor.extract(url: url, limit: search.settings.maximumContentBytes) : .notRequested
+#endif
                     let record = FileRecord(path: url.path, name: url.lastPathComponent, kind: url.pathExtension.lowercased(),
                         size: v.fileSize.map(Int64.init), created: v.creationDate, modified: v.contentModificationDate,
                         dateAdded: v.addedToDirectoryDate, isHidden: v.isHidden,
@@ -66,6 +81,14 @@ public struct DirectScanner: Sendable {
         if !batch.isEmpty { await onBatch(batch) }
         return summary
     }
+
+#if os(macOS)
+    private static func isUnmaterializedCloudItem(_ values: URLResourceValues) -> Bool {
+        guard values.isUbiquitousItem == true else { return false }
+        guard let status = values.ubiquitousItemDownloadingStatus else { return true }
+        return status != .current && status != .downloaded
+    }
+#endif
 }
 
 private final class ScanIssues: @unchecked Sendable {

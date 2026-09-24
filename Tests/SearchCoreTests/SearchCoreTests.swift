@@ -23,6 +23,11 @@ final class SearchCoreTests: XCTestCase {
         XCTAssertEqual(Evaluator.evaluate(.group(.any, [yes, unknown]), record: known), .yes)
         XCTAssertEqual(Evaluator.evaluate(.group(.not, [unknown]), record: known), .unknown)
     }
+    func testSizeInclusiveRangeAndInvalidOrdering() {
+        XCTAssertEqual(Evaluator.evaluate(.init(field: .size, op: .inclusiveRange, value: "40", secondValue: "50"), record: known), .yes)
+        XCTAssertEqual(Evaluator.evaluate(.init(field: .size, op: .inclusiveRange, value: "50", secondValue: "40"), record: known), .unknown)
+        XCTAssertEqual(Evaluator.evaluate(.init(field: .size, op: .inclusiveRange, value: "40"), record: known), .unknown)
+    }
     func testRegexFixture() {
         let c = Criterion(field: .filename, op: .matchesRegex, value: #"\Ainvoice_[0-9]{4}_[0-9]{4}\.pdf\z"#, caseMode: .sensitive)
         func record(_ name: String) -> FileRecord { .init(path: name, name: name, kind: nil, size: 0, created: nil, modified: nil, dateAdded: nil, isHidden: false, content: nil, contentFailure: nil) }

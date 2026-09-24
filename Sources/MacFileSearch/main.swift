@@ -15,6 +15,7 @@ import SearchCore
     @Published var field: Field = .filename
     @Published var op: Operator = .contains
     @Published var value = ""
+    @Published var secondValue = ""
     @Published var results: [FileRecord] = []
     @Published var status = "Ready — choose Indexed or Direct Scan"
     @Published var coverageDetails: [String] = []
@@ -75,7 +76,8 @@ import SearchCore
         running = true; status = "Starting direct scan of \(locations.count) location(s)…"
         let currentGeneration = UUID(); generation = currentGeneration
         let token = CancellationToken(); self.token = token
-        let search = SavedSearch(name: "Current", expression: .criterion(.init(field: field, op: op, value: value)), locations: locations)
+        let upperBound = field == .size && op == .inclusiveRange ? secondValue : nil
+        let search = SavedSearch(name: "Current", expression: .criterion(.init(field: field, op: op, value: value, secondValue: upperBound)), locations: locations)
         task = Task {
             let summary = await DirectScanner().search(search, token: token) { [weak self] batch in
                 await MainActor.run {
@@ -91,7 +93,7 @@ import SearchCore
         }
     }
     func cancel() { generation = UUID(); Task { await token?.cancel() }; task?.cancel(); running = false }
-    func clear() { cancel(); value = ""; results = []; status = "Ready" }
+    func clear() { cancel(); value = ""; secondValue = ""; results = []; status = "Ready" }
 }
 
 struct ContentView: View {
@@ -118,7 +120,12 @@ struct ContentView: View {
                 HStack {
                     Picker("Field", selection: $model.field) { ForEach(Field.allCases, id: \.self) { Text($0.rawValue).tag($0) } }.frame(width: 150)
                     Picker("Operator", selection: $model.op) { ForEach(model.availableOperators, id: \.self) { Text($0.rawValue).tag($0) } }.frame(width: 180)
-                    TextField("Value", text: $model.value).accessibilityLabel("Filter value")
+                    TextField(model.op == .inclusiveRange ? "Minimum size" : "Value", text: $model.value)
+                        .accessibilityLabel(model.op == .inclusiveRange ? "Minimum size" : "Filter value")
+                    if model.field == .size && model.op == .inclusiveRange {
+                        TextField("Maximum size", text: $model.secondValue)
+                            .accessibilityLabel("Maximum size")
+                    }
                     if model.op == .matchesRegex || model.op == .doesNotMatchRegex { Button("Create…") { openWindow(id: "regex") } }
                 }.onChange(of: model.field) { _ in model.ensureValidOperator() }
                 HStack {
