@@ -53,6 +53,19 @@ final class SearchCoreTests: XCTestCase {
         let delivered = await box.count
         XCTAssertEqual(summary.matched, 1); XCTAssertEqual(delivered, 1)
     }
+    func testEnumerationFailuresAreIncludedInSummary() {
+        var summary = SearchSummary()
+        summary.recordEnumerationFailures([
+            (path: "/protected/one", description: "Permission denied"),
+            (path: "/protected/two", description: "Not readable")
+        ])
+
+        XCTAssertEqual(summary.skipped, 2)
+        XCTAssertEqual(summary.messages, [
+            "Unreadable: /protected/one (Permission denied)",
+            "Unreadable: /protected/two (Not readable)"
+        ])
+    }
 }
 actor ResultBox { var count = 0; func add(_ values: [FileRecord]) { count += values.count } }
 

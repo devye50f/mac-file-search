@@ -25,11 +25,11 @@ public struct DirectScanner: Sendable {
                     enumerationFailures.append((url.path, error.localizedDescription))
                     return true
                 }) else {
-                summary.skipped += max(1, enumerationFailures.count)
                 if enumerationFailures.isEmpty {
+                    summary.skipped += 1
                     summary.messages.append("Unable to enumerate: \(location.path)")
                 } else {
-                    summary.messages.append(contentsOf: enumerationFailures.map { "Unreadable: \($0.path) (\($0.description))" })
+                    summary.recordEnumerationFailures(enumerationFailures)
                 }
                 continue
             }
@@ -59,11 +59,17 @@ public struct DirectScanner: Sendable {
                     if batch.count >= 100 { await onBatch(batch); batch.removeAll(keepingCapacity: true) }
                 } catch { summary.skipped += 1; summary.messages.append("Unreadable: \(url.path)") }
             }
-            summary.skipped += enumerationFailures.count
-            summary.messages.append(contentsOf: enumerationFailures.map { "Unreadable: \($0.path) (\($0.description))" })
+            summary.recordEnumerationFailures(enumerationFailures)
         }
         if !batch.isEmpty { await onBatch(batch) }
         return summary
+    }
+}
+
+extension SearchSummary {
+    mutating func recordEnumerationFailures(_ failures: [(path: String, description: String)]) {
+        skipped += failures.count
+        messages.append(contentsOf: failures.map { "Unreadable: \($0.path) (\($0.description))" })
     }
 }
 
